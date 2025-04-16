@@ -1,0 +1,51 @@
+name: "USDA Bid Solicitation With Suspicious OCR Pattern"
+description: "Detects messages with USDA-related bid documents that contain specific text patterns in both the message content and any macro-enabled or PDF attachments. The rule analyzes OCR text for Department of Agriculture references and validates sender domain alignment."
+type: "rule"
+severity: "medium"
+source: |
+  type.inbound
+    and length(attachments) == 1
+    and all(attachments,
+            .file_extension in~ $file_extensions_macros or .file_type == "pdf"
+    )
+    and strings.icontains(body.current_thread.text, "bid")
+    and (
+      strings.icontains(subject.subject,
+                      'invitation to bid'
+      )
+      or any(attachments,
+             strings.icontains(.file_name,
+                             'usda'
+             )
+      )
+    )
+    and strings.icontains(sender.email.domain.domain, "usda")
+    and (
+      any(ml.nlu_classifier(body.current_thread.text).entities,
+          .text == "usda" 
+          and .name in ("sender", "org")
+      )
+      and any(attachments,
+              any(file.explode(.),
+                  any(ml.nlu_classifier(.scan.ocr.raw).entities,
+                      strings.icontains(.text, "Agriculture")
+                  )
+              )
+      )
+    )
+
+attack_types:
+  - "BEC/Fraud"
+  - "Malware/Ransomware"
+tactics_and_techniques:
+  - "Impersonation: Brand"
+  - "PDF"
+  - "Macros"
+  - "Social engineering"
+detection_methods:
+  - "Content analysis"
+  - "File analysis"
+  - "Header analysis"
+  - "Natural Language Understanding"
+  - "Optical Character Recognition"
+  - "Sender analysis"
